@@ -58,3 +58,7 @@ cookies.txt
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Instagram session
+.instagram_session
+.instagram_session_cookies.txt

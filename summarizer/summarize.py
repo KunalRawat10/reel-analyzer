@@ -8,24 +8,74 @@ import config
 
 
 def build_structured_prompt(merged_text: str) -> str:
-    return f"""You are a structured knowledge extraction engine.
-Analyze the following educational Instagram Reel content and return ONLY a valid JSON object with these exact keys:
+    return f"""You are a structured knowledge extraction engine analyzing an Instagram Reel.
+Analyze ALL available information together. Combine sources intelligently.
+If OCR and transcript overlap, merge them. Never ignore OCR. Never ignore the caption.
+If something is not mentioned in ANY source, return [] or null. Do NOT invent URLs, books, people, or tools.
 
-- "summary": a concise 2-3 sentence summary of the Reel's core message
-- "key_concepts": a list of the main ideas or concepts discussed
-- "important_tools": a list of any tools, software, libraries, or platforms mentioned
-- "action_items": a list of practical steps or takeaways for the viewer
-- "technologies": a list of technologies or programming languages mentioned
-- "learning_level": one of ["beginner", "intermediate", "advanced"] based on content complexity
-- "tags": a list of 3-5 relevant hashtags or keywords
+-------------------------
+TRANSCRIPT
+-------------------------
+{merged_text.split('=== TRANSCRIPT ===')[1].split('===')[0].strip() if '=== TRANSCRIPT ===' in merged_text else merged_text}
 
-Do not include any text outside the JSON. Return only the JSON object.
+-------------------------
+OCR TEXT
+-------------------------
+{merged_text.split('=== OCR TEXT ===')[1].split('===')[0].strip() if '=== OCR TEXT ===' in merged_text else ''}
 
-CONTENT TO ANALYZE:
+-------------------------
+CAPTION
+-------------------------
+{merged_text.split('=== CAPTION ===')[1].split('=== RESOURCES ===')[0].strip() if '=== CAPTION ===' in merged_text else (merged_text.split('=== RESOURCES ===')[0].strip() if '=== RESOURCES ===' in merged_text else merged_text)}
+
+-------------------------
+EXTRACTION RULES
+-------------------------
+- executive_summary: 2-3 concise sentences combining all sources
+- core_idea: the main idea or message of the Reel
+- key_lessons: practical concepts or takeaways
+- actionable_takeaways: concrete steps a viewer can take
+- tools_mentioned: software, libraries, platforms mentioned in transcript or OCR
+- frameworks_mentioned: AI frameworks or methodologies
+- books_or_courses: only if explicitly named in any source; else []
+- people_mentioned: only if explicitly named; else []
+- companies_mentioned: only if explicitly named; else []
+- public_resources: GitHub repos, websites, links mentioned
+- links: URLs found in any source; else []
+- comment_trigger: detect exact phrases like "Comment AI", "Comment FREE", "DM me", "Link in bio", "Check bio", "Download below", "Get the prompt"; if none, null
+- creator_cta: any call-to-action from the creator; if none, null
+- keywords: 5-15 useful keywords combining all sources
+- confidence: float between 0.0 and 1.0 based on how clearly the content supports the extraction
+
+ANTI-HALLUCINATION:
+- If a category has no evidence: return [] or null
+- Do NOT guess URLs, books, people, companies, or frameworks
+- Only extract what appears in transcript, OCR, or caption
+
+OUTPUT FORMAT (ONLY JSON, NO OTHER TEXT):
+{{
+  "executive_summary": "",
+  "core_idea": "",
+  "key_lessons": [],
+  "actionable_takeaways": [],
+  "tools_mentioned": [],
+  "frameworks_mentioned": [],
+  "books_or_courses": [],
+  "people_mentioned": [],
+  "companies_mentioned": [],
+  "public_resources": [],
+  "links": [],
+  "comment_trigger": null,
+  "creator_cta": null,
+  "keywords": [],
+  "confidence": 0.0
+}}
+
+CONTENT:
 ---
 {merged_text}
 ---
-JSON OUTPUT:"""
+JSON OUTPUT ONLY:"""
 
 
 def summarize_local_structured(merged_text: str) -> dict:
@@ -33,24 +83,40 @@ def summarize_local_structured(merged_text: str) -> dict:
 
     if not ollama_client.health_check():
         return {
-            "summary": "Ollama server unavailable. Please run 'ollama serve'.",
-            "key_concepts": [],
-            "important_tools": [],
-            "action_items": ["Start Ollama server (ollama serve)"],
-            "technologies": [],
-            "learning_level": "unknown",
-            "tags": ["ollama", "local-llm"],
+            "executive_summary": "Ollama server unavailable. Please run 'ollama serve'.",
+            "core_idea": "",
+            "key_lessons": [],
+            "actionable_takeaways": ["Start Ollama server (ollama serve)"],
+            "tools_mentioned": [],
+            "frameworks_mentioned": [],
+            "books_or_courses": [],
+            "people_mentioned": [],
+            "companies_mentioned": [],
+            "public_resources": [],
+            "links": [],
+            "comment_trigger": None,
+            "creator_cta": None,
+            "keywords": ["ollama", "local-llm"],
+            "confidence": 0.0,
         }
 
     if not ollama_client.verify_model():
         return {
-            "summary": f"Local model '{config.OLLAMA_MODEL}' not installed. Please run: ollama pull {config.OLLAMA_MODEL}",
-            "key_concepts": [],
-            "important_tools": [],
-            "action_items": [f"Install model: ollama pull {config.OLLAMA_MODEL}"],
-            "technologies": [],
-            "learning_level": "unknown",
-            "tags": ["ollama", "model-install"],
+            "executive_summary": f"Local model '{config.OLLAMA_MODEL}' not installed. Please run: ollama pull {config.OLLAMA_MODEL}",
+            "core_idea": "",
+            "key_lessons": [],
+            "actionable_takeaways": [f"Install model: ollama pull {config.OLLAMA_MODEL}"],
+            "tools_mentioned": [],
+            "frameworks_mentioned": [],
+            "books_or_courses": [],
+            "people_mentioned": [],
+            "companies_mentioned": [],
+            "public_resources": [],
+            "links": [],
+            "comment_trigger": None,
+            "creator_cta": None,
+            "keywords": ["ollama", "model-install"],
+            "confidence": 0.0,
         }
 
     prompt = build_structured_prompt(merged_text)
@@ -65,37 +131,64 @@ def summarize_local_structured(merged_text: str) -> dict:
     except Exception as e:
         print(f"Ollama structured extraction parse error: {e}")
         return {
-            "summary": f"Extraction parse error: {e}",
-            "key_concepts": [],
-            "important_tools": [],
-            "action_items": ["Review source content manually"],
-            "technologies": [],
-            "learning_level": "unknown",
-            "tags": [],
+            "executive_summary": f"Extraction parse error: {e}",
+            "core_idea": "",
+            "key_lessons": [],
+            "actionable_takeaways": ["Review source content manually"],
+            "tools_mentioned": [],
+            "frameworks_mentioned": [],
+            "books_or_courses": [],
+            "people_mentioned": [],
+            "companies_mentioned": [],
+            "public_resources": [],
+            "links": [],
+            "comment_trigger": None,
+            "creator_cta": None,
+            "keywords": [],
+            "confidence": 0.0,
         }
 
-    # Normalize to expected keys
-    normalized = {}
-    normalized["summary"] = parsed.get("summary", parsed.get("short_summary", parsed.get("Summary", str(parsed))))
-    normalized["key_concepts"] = parsed.get("key_concepts", parsed.get("Key concepts", parsed.get("concepts", [])))
-    normalized["important_tools"] = parsed.get("important_tools", parsed.get("Important tools", parsed.get("tools", [])))
-    normalized["action_items"] = parsed.get("action_items", parsed.get("Action items", parsed.get("actions", [])))
-    normalized["technologies"] = parsed.get("technologies", parsed.get("Technologies mentioned", parsed.get("tech", [])))
-    normalized["learning_level"] = parsed.get("learning_level", parsed.get("Learning level", "intermediate"))
-    normalized["tags"] = parsed.get("tags", parsed.get("Tags", parsed.get("keywords", [])))
-    for key in ["key_concepts", "important_tools", "action_items", "tags"]:
-        val = normalized.get(key)
-        if isinstance(val, str):
-            normalized[key] = [val] if val else []
-        elif not isinstance(val, list):
-            normalized[key] = []
-    if isinstance(normalized.get("technologies"), str):
-        normalized["technologies"] = [normalized["technologies"]] if normalized["technologies"] else []
+    # Normalize to exact schema keys
+    def get_list(val):
+        if isinstance(val, list):
+            return val
+        if isinstance(val, str) and val:
+            return [val]
+        return []
+
+    def get_str(val):
+        if isinstance(val, str) and val:
+            return val
+        return ""
+
+    def get_float(val):
+        try:
+            f = float(val)
+            return max(0.0, min(1.0, f))
+        except (TypeError, ValueError):
+            return 0.0
+
+    normalized = {
+        "executive_summary": get_str(parsed.get("executive_summary", parsed.get("summary", parsed.get("short_summary", "")))),
+        "core_idea": get_str(parsed.get("core_idea", parsed.get("main_idea", parsed.get("idea", "")))),
+        "key_lessons": get_list(parsed.get("key_lessons", parsed.get("key_concepts", parsed.get("concepts", [])))),
+        "actionable_takeaways": get_list(parsed.get("actionable_takeaways", parsed.get("action_items", parsed.get("actions", [])))),
+        "tools_mentioned": get_list(parsed.get("tools_mentioned", parsed.get("important_tools", parsed.get("tools", [])))),
+        "frameworks_mentioned": get_list(parsed.get("frameworks_mentioned", parsed.get("frameworks", parsed.get("technologies", [])))),
+        "books_or_courses": get_list(parsed.get("books_or_courses", parsed.get("books", parsed.get("courses", [])))),
+        "people_mentioned": get_list(parsed.get("people_mentioned", parsed.get("people", parsed.get("names", [])))),
+        "companies_mentioned": get_list(parsed.get("companies_mentioned", parsed.get("companies", parsed.get("companies", [])))),
+        "public_resources": get_list(parsed.get("public_resources", parsed.get("resources", parsed.get("github_repos", parsed.get("urls", []))))),
+        "links": get_list(parsed.get("links", parsed.get("urls", parsed.get("public_resources", [])))),
+        "comment_trigger": parsed.get("comment_trigger", parsed.get("trigger", None)) if isinstance(parsed.get("comment_trigger", parsed.get("trigger", None)), str) else (parsed.get("comment_trigger", parsed.get("trigger", None)) if parsed.get("comment_trigger", parsed.get("trigger")) else None),
+        "creator_cta": parsed.get("creator_cta", parsed.get("cta", None)) if isinstance(parsed.get("creator_cta", parsed.get("cta", None)), str) else (parsed.get("creator_cta", parsed.get("cta", None)) if parsed.get("creator_cta", parsed.get("cta")) else None),
+        "keywords": get_list(parsed.get("keywords", parsed.get("tags", parsed.get("keywords", [])))),
+        "confidence": get_float(parsed.get("confidence", parsed.get("confidence_score", 0.5))),
+    }
     return normalized
 
 
 def summarize_cloud_structured(merged_text: str) -> dict:
-    # Preserve existing cloud interface but structure output the same way
     prompt = build_structured_prompt(merged_text)
     import requests
     headers = {
@@ -105,7 +198,7 @@ def summarize_cloud_structured(merged_text: str) -> dict:
     payload = {
         "model": config.CLOUD_MODEL,
         "messages": [
-            {"role": "system", "content": "You are a structured knowledge extraction engine. Always return valid JSON only."},
+            {"role": "system", "content": "You are a structured knowledge extraction engine. Always return valid JSON only. Never include prose outside JSON."},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.1,
@@ -122,22 +215,43 @@ def summarize_cloud_structured(merged_text: str) -> dict:
         parsed = json.loads(content)
     except Exception:
         parsed = {"summary": content}
-    normalized = {}
-    normalized["summary"] = parsed.get("summary", parsed.get("short_summary", parsed.get("Summary", str(parsed))))
-    normalized["key_concepts"] = parsed.get("key_concepts", parsed.get("Key concepts", []))
-    normalized["important_tools"] = parsed.get("important_tools", parsed.get("Important tools", []))
-    normalized["action_items"] = parsed.get("action_items", parsed.get("Action items", []))
-    normalized["technologies"] = parsed.get("technologies", parsed.get("Technologies mentioned", []))
-    normalized["learning_level"] = parsed.get("learning_level", parsed.get("Learning level", "intermediate"))
-    normalized["tags"] = parsed.get("tags", parsed.get("Tags", []))
-    for key in ["key_concepts", "important_tools", "action_items", "tags"]:
-        val = normalized.get(key)
-        if isinstance(val, str):
-            normalized[key] = [val] if val else []
-        elif not isinstance(val, list):
-            normalized[key] = []
-    if isinstance(normalized.get("technologies"), str):
-        normalized["technologies"] = [normalized["technologies"]] if normalized["technologies"] else []
+
+    def get_list(val):
+        if isinstance(val, list):
+            return val
+        if isinstance(val, str) and val:
+            return [val]
+        return []
+
+    def get_str(val):
+        if isinstance(val, str) and val:
+            return val
+        return ""
+
+    def get_float(val):
+        try:
+            f = float(val)
+            return max(0.0, min(1.0, f))
+        except (TypeError, ValueError):
+            return 0.0
+
+    normalized = {
+        "executive_summary": get_str(parsed.get("executive_summary", parsed.get("summary", parsed.get("short_summary", str(parsed))))),
+        "core_idea": get_str(parsed.get("core_idea", parsed.get("main_idea", parsed.get("idea", "")))),
+        "key_lessons": get_list(parsed.get("key_lessons", parsed.get("key_concepts", []))),
+        "actionable_takeaways": get_list(parsed.get("actionable_takeaways", parsed.get("action_items", []))),
+        "tools_mentioned": get_list(parsed.get("tools_mentioned", parsed.get("important_tools", parsed.get("tools", [])))),
+        "frameworks_mentioned": get_list(parsed.get("frameworks_mentioned", parsed.get("frameworks", []))),
+        "books_or_courses": get_list(parsed.get("books_or_courses", parsed.get("books", parsed.get("courses", [])))),
+        "people_mentioned": get_list(parsed.get("people_mentioned", parsed.get("people", []))),
+        "companies_mentioned": get_list(parsed.get("companies_mentioned", parsed.get("companies", []))),
+        "public_resources": get_list(parsed.get("public_resources", parsed.get("resources", parsed.get("github_repos", parsed.get("urls", []))))),
+        "links": get_list(parsed.get("links", parsed.get("urls", []))),
+        "comment_trigger": parsed.get("comment_trigger", parsed.get("trigger", None)) if isinstance(parsed.get("comment_trigger", parsed.get("trigger", None)), str) else (parsed.get("comment_trigger", parsed.get("trigger", None)) if parsed.get("comment_trigger", parsed.get("trigger")) else None),
+        "creator_cta": parsed.get("creator_cta", parsed.get("cta", None)) if isinstance(parsed.get("creator_cta", parsed.get("cta", None)), str) else (parsed.get("creator_cta", parsed.get("cta", None)) if parsed.get("creator_cta", parsed.get("cta")) else None),
+        "keywords": get_list(parsed.get("keywords", parsed.get("tags", []))),
+        "confidence": get_float(parsed.get("confidence", parsed.get("confidence_score", 0.5))),
+    }
     return normalized
 
 

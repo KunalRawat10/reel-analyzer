@@ -16,7 +16,40 @@ def acquire_reel(url: str, output_path: Path | None = None) -> Path:
     """
     if output_path is None:
         output_path = config.TEMP_DIR / "reel.mp4"
+    if not isinstance(output_path, Path):
+        output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path is None or not isinstance(output_path, Path):
+        raise RuntimeError(f"Invalid output_path: {output_path}")
+
+    # Clean stale output files before attempting download
+    if output_path.exists():
+        try:
+            output_path.unlink()
+            print(f"[Acquire] Deleted stale file: {output_path}")
+        except Exception as e:
+            print(f"[Acquire] Could not delete stale {output_path}: {e}")
+    audio_path_stale = config.TEMP_DIR / "audio.wav"
+    if audio_path_stale.exists():
+        try:
+            audio_path_stale.unlink()
+            print(f"[Acquire] Deleted stale audio: {audio_path_stale}")
+        except Exception as e:
+            print(f"[Acquire] Could not delete stale audio: {e}")
+    frames_dir = config.FRAMES_DIR
+    if frames_dir.exists():
+        for item in frames_dir.iterdir():
+            try:
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    import shutil
+                    shutil.rmtree(item, ignore_errors=True)
+            except Exception as e:
+                print(f"[Acquire] Could not clean stale frame file {item}: {e}")
+        print(f"[Acquire] Cleaned stale files in {frames_dir}")
+
+    # Try initial download with session cookies (raw .instagram_session or converted cookies)
 
     # Try initial download with session cookies (raw .instagram_session or converted cookies)
     converted_cookie_path = config.BASE_DIR / ".instagram_session_cookies.txt"
@@ -49,7 +82,7 @@ def acquire_reel(url: str, output_path: Path | None = None) -> Path:
 
     # Helper to detect auth-related failures from yt-dlp stderr/stdout
     def is_auth_failure(stderr_text: str, stdout_text: str) -> bool:
-        indicators = ["login", "unavailable", "private", "post isn't available", "recaptcha", "challenge", "authentication required"]
+        indicators = ["login", "unavailable", "private", "post isn't available", "recaptcha", "challenge", "authentication required", "cookies file must be netscape formatted", "not json"]
         combined = (stderr_text + stdout_text).lower()
         return any(ind in combined for ind in indicators)
 
@@ -105,8 +138,29 @@ def acquire_reel(url: str, output_path: Path | None = None) -> Path:
                     else:
                         print(f"[Acquire] Retry stderr preview: {retry_result.stderr[-500:] if len(retry_result.stderr) > 500 else retry_result.stderr}")
                         result = retry_result
-                else:
-                    print("[Acquire] Cookie conversion failed; not retrying.")
+                try:
+                    audio_path_stale = config.TEMP_DIR / 'audio.wav'
+                    if audio_path_stale.exists():
+                        audio_path_stale.unlink()
+                except Exception:
+                    pass
+                try:
+                    frames_dir = config.FRAMES_DIR
+                    if frames_dir.exists():
+                        for item in frames_dir.iterdir():
+                            try:
+                                if item.is_file():
+                                    item.unlink()
+                                elif item.is_dir():
+                                    import shutil
+                                    shutil.rmtree(item, ignore_errors=True)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            stderr_output = result.stderr if result.stderr else ""
+            if result.returncode != 0:
+                raise RuntimeError(f'yt-dlp acquisition failed with exit code {result.returncode}. Stderr: {stderr_output}')
     except FileNotFoundError:
         raise ValueError("yt-dlp is not installed. Install with: pip install yt-dlp")
     except subprocess.TimeoutExpired:
