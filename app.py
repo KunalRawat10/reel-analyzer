@@ -263,11 +263,11 @@ def main():
             print(f"{'TOTAL':<20} : {total_elapsed:.2f} s")
             print("=" * 50)
             print()
-            print(f"Download: {statuses.get('Download', 'FAILED')}")
-            print(f"Whisper: {statuses.get('Whisper', 'FAILED')}")
-            print(f"Frames: {statuses.get('Frame Extraction', 'FAILED')}")
-            print(f"OCR: {statuses.get('OCR', 'FAILED')}")
-            print(f"LLM: {statuses.get('LLM', 'FAILED')}")
+            print(f"Download: {statuses.get('Download', 'FAILED')} ({timings.get('Download', 0.0):.2f} s)")
+            print(f"Whisper: {statuses.get('Whisper', 'FAILED')} ({timings.get('Whisper', 0.0):.2f} s)")
+            print(f"Frames: {statuses.get('Frame Extraction', 'FAILED')} ({timings.get('Frame Extraction', 0.0):.2f} s)")
+            print(f"OCR: {statuses.get('OCR', 'FAILED')} ({timings.get('OCR', 0.0):.2f} s)")
+            print(f"LLM: {statuses.get('LLM', 'FAILED')} ({timings.get('LLM', 0.0):.2f} s)")
             try:
                 if 'browser' in locals() and browser is not None:
                     browser.close()

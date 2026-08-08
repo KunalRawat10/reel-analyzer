@@ -116,6 +116,7 @@ def run_ocr(frames_dir: Path) -> list[str]:
     ocr_processed = 0
     subtitle_crop_successes = 0
     fallback_count = 0
+    full_frame_ocr_calls = 0
     print(f"OCR: Processing {total} frames")
     prev_hash = None
     start_time = time.time()
@@ -190,6 +191,7 @@ def run_ocr(frames_dir: Path) -> list[str]:
                     fallback_count += 1
                     print("OCR: Fallback")
                     full_results = reader.readtext(resized)
+                    full_frame_ocr_calls += 1
                     filtered_full = []
                     for r in full_results:
                         if len(r) >= 2:
@@ -224,6 +226,7 @@ def run_ocr(frames_dir: Path) -> list[str]:
                 fallback_count += 1
                 print("OCR: Fallback")
                 full_results = reader.readtext(resized)
+                full_frame_ocr_calls += 1
                 filtered_full = []
                 for r in full_results:
                     if len(r) >= 2:
@@ -297,8 +300,12 @@ def run_ocr(frames_dir: Path) -> list[str]:
     print(f"{ocr_processed}")
     print("Skipped:")
     print(f"{skipped}")
+    print("Subtitle successes:")
+    print(f"{subtitle_crop_successes}")
     print("Fallbacks:")
     print(f"{fallback_count}")
+    print("Full-frame OCR calls:")
+    print(f"{full_frame_ocr_calls}")
     print("Unique sentences:")
     print(f"{len(output)}")
     print(f"Runtime: {elapsed:.2f} sec")
