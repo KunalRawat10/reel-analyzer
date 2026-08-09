@@ -64,6 +64,51 @@ def _is_isolated_symbol(text: str) -> bool:
     return len(stripped) <= 3 and not any(ch.isalpha() for ch in stripped)
 
 
+def _is_resource_text(text: str) -> bool:
+    stripped = text.strip() if isinstance(text, str) else ""
+    if not stripped:
+        return False
+    lower = stripped.lower()
+    # Protocol URLs
+    if lower.startswith(("http://", "https://", "www.")):
+        return True
+    # Domain patterns
+    resource_hosts = (
+        "github.com/", "youtube.com/", "youtu.be/",
+        "instagram.com/", "twitter.com/", "x.com/",
+        "discord.gg/", "discord.com/",
+    )
+    for host in resource_hosts:
+        if host in lower:
+            return True
+    # Email-like
+    if "@" in stripped:
+        after = stripped.split("@")[-1]
+        if "." in after:
+            last_part = after.split(".")[-1]
+            if len(last_part) >= 2 and not any(c.isspace() for c in after):
+                return True
+    # Hashtag
+    if stripped.startswith("#") and len(stripped) > 1:
+        return True
+    # Social handle
+    if stripped.startswith("@") and len(stripped) > 1:
+        handle_token = stripped[1:].split()[0] if " " in stripped[1:] else stripped[1:]
+        if handle_token and (handle_token[0].isalnum() or handle_token[0] == "_"):
+            if "@" not in handle_token:
+                return True
+    # Obvious domain name (e.g., example.com)
+    if " " not in stripped and "." in stripped:
+        parts = stripped.split(".")
+        if len(parts) >= 2:
+            last_clean = parts[-1].rstrip(".,;:!?")
+            if len(last_clean) >= 2 and last_clean.isalpha():
+                first_clean = parts[0].lstrip(".")
+                if first_clean and any(ch.isalnum() for ch in first_clean):
+                    return True
+    return False
+
+
 def _merge_nearby(results: list, max_gap: int = 40) -> list:
     if not results:
         return results
@@ -117,6 +162,7 @@ def run_ocr(frames_dir: Path) -> list[str]:
     subtitle_crop_successes = 0
     fallback_count = 0
     full_frame_ocr_calls = 0
+    resource_like_ocr_regions = 0
     print(f"OCR: Processing {total} frames")
     prev_hash = None
     start_time = time.time()
@@ -144,7 +190,7 @@ def run_ocr(frames_dir: Path) -> list[str]:
             print(f"OCR: Processing frame {idx}/{total}")
 
             rh, rw = resized.shape[:2]
-            crop_start = int(rh * 0.62)
+            crop_start = int(rh * 0.35)
             subtitle_crop = resized[crop_start:, :]
 
             margin_px = int(min(rw, rh) * 0.08)
@@ -164,23 +210,27 @@ def run_ocr(frames_dir: Path) -> list[str]:
                         min_y, max_y = min(y_points), max(y_points)
                         box_w = max_x - min_x
                         box_h = max_y - min_y
+                        stripped_text = text.strip() if isinstance(text, str) else ""
+                        is_resource = _is_resource_text(stripped_text)
                         if box_w < 15 or box_h < 8:
                             continue
                         aspect = box_w / max(box_h, 1)
-                        if aspect < 0.05 or aspect > 40:
+                        if not is_resource:
+                            if aspect < 0.05 or aspect > 40:
+                                continue
+                        if not is_resource:
+                            if min_x < margin_px or max_x > rw - margin_px:
+                                if len(stripped_text) < 4 or _is_ui_text(stripped_text):
+                                    continue
+                        if not is_resource and _is_ui_text(stripped_text):
                             continue
-                        if min_x < margin_px or max_x > rw - margin_px:
-                            stripped = text.strip() if isinstance(text, str) else ""
-                            if len(stripped) < 4 or _is_ui_text(stripped):
-                                continue
-                        text_val = r[1]
-                        if isinstance(text_val, str):
-                            stripped = text_val.strip()
-                            if len(stripped) < 4 or _is_ui_text(stripped):
-                                continue
+                        if len(stripped_text) < 4:
+                            continue
                         confidence = float(r[2]) if len(r) >= 3 else 1.0
                         if confidence < 0.60:
                             continue
+                        if is_resource:
+                            resource_like_ocr_regions += 1
                         filtered_subtitle.append(r)
 
                 results_to_use = filtered_subtitle
@@ -203,23 +253,27 @@ def run_ocr(frames_dir: Path) -> list[str]:
                             min_y, max_y = min(y_points), max(y_points)
                             box_w = max_x - min_x
                             box_h = max_y - min_y
+                            stripped_text = text.strip() if isinstance(text, str) else ""
+                            is_resource = _is_resource_text(stripped_text)
                             if box_w < 15 or box_h < 8:
                                 continue
                             aspect = box_w / max(box_h, 1)
-                            if aspect < 0.05 or aspect > 40:
+                            if not is_resource:
+                                if aspect < 0.05 or aspect > 40:
+                                    continue
+                            if not is_resource:
+                                if min_x < margin_px or max_x > rw - margin_px:
+                                    if len(stripped_text) < 4 or _is_ui_text(stripped_text):
+                                        continue
+                            if not is_resource and _is_ui_text(stripped_text):
                                 continue
-                            if min_x < margin_px or max_x > rw - margin_px:
-                                stripped = text.strip() if isinstance(text, str) else ""
-                                if len(stripped) < 4 or _is_ui_text(stripped):
-                                    continue
-                            text_val = r[1]
-                            if isinstance(text_val, str):
-                                stripped = text_val.strip()
-                                if len(stripped) < 4 or _is_ui_text(stripped):
-                                    continue
+                            if len(stripped_text) < 4:
+                                continue
                             confidence = float(r[2]) if len(r) >= 3 else 1.0
                             if confidence < 0.60:
                                 continue
+                            if is_resource:
+                                resource_like_ocr_regions += 1
                             filtered_full.append(r)
                     results_to_use = filtered_full
             else:
@@ -238,23 +292,27 @@ def run_ocr(frames_dir: Path) -> list[str]:
                         min_y, max_y = min(y_points), max(y_points)
                         box_w = max_x - min_x
                         box_h = max_y - min_y
+                        stripped_text = text.strip() if isinstance(text, str) else ""
+                        is_resource = _is_resource_text(stripped_text)
                         if box_w < 15 or box_h < 8:
                             continue
                         aspect = box_w / max(box_h, 1)
-                        if aspect < 0.05 or aspect > 40:
+                        if not is_resource:
+                            if aspect < 0.05 or aspect > 40:
+                                continue
+                        if not is_resource:
+                            if min_x < margin_px or max_x > rw - margin_px:
+                                if len(stripped_text) < 4 or _is_ui_text(stripped_text):
+                                    continue
+                        if not is_resource and _is_ui_text(stripped_text):
                             continue
-                        if min_x < margin_px or max_x > rw - margin_px:
-                            stripped = text.strip() if isinstance(text, str) else ""
-                            if len(stripped) < 4 or _is_ui_text(stripped):
-                                continue
-                        text_val = r[1]
-                        if isinstance(text_val, str):
-                            stripped = text_val.strip()
-                            if len(stripped) < 4 or _is_ui_text(stripped):
-                                continue
+                        if len(stripped_text) < 4:
+                            continue
                         confidence = float(r[2]) if len(r) >= 3 else 1.0
                         if confidence < 0.60:
                             continue
+                        if is_resource:
+                            resource_like_ocr_regions += 1
                         filtered_full.append(r)
                 results_to_use = filtered_full
 
@@ -266,11 +324,19 @@ def run_ocr(frames_dir: Path) -> list[str]:
                 confidence_val = confidence if isinstance(confidence, float) else (float(confidence) if isinstance(confidence, (int, float, str)) else 1.0)
                 if isinstance(text, str) and text:
                     stripped = text.strip()
-                    if len(stripped) >= 4 and not _is_numbers_only(stripped) and not _is_isolated_symbol(stripped) and confidence_val >= 0.60:
-                        if not _is_ui_text(stripped):
+                    is_resource = _is_resource_text(stripped)
+                    if len(stripped) >= 4 and confidence_val >= 0.60:
+                        if is_resource:
+                            # Resource-like text: bypass generic UI/numbers/symbol filters
                             normalized = _normalize(stripped)
                             texts.add(normalized)
                             count += 1
+                        else:
+                            # Normal text: existing filtering unchanged
+                            if not _is_numbers_only(stripped) and not _is_isolated_symbol(stripped) and not _is_ui_text(stripped):
+                                normalized = _normalize(stripped)
+                                texts.add(normalized)
+                                count += 1
 
             del subtitle_crop
             del resized
@@ -306,6 +372,8 @@ def run_ocr(frames_dir: Path) -> list[str]:
     print(f"{fallback_count}")
     print("Full-frame OCR calls:")
     print(f"{full_frame_ocr_calls}")
+    print("Resource-like OCR regions:")
+    print(f"{resource_like_ocr_regions}")
     print("Unique sentences:")
     print(f"{len(output)}")
     print(f"Runtime: {elapsed:.2f} sec")
