@@ -44,12 +44,28 @@ def save_md(data: dict, reel_id: str = None) -> Path:
         lines.append(f"- {tools}")
     lines.append("")
     lines.append("## Resources")
-    resources = data.get("resources", {})
-    for category, items in resources.items():
+    # Direct resources (existing regex categories, excluding mentioned_resources)
+    resources_local = data.get("resources", {})
+    direct_resources = {k: v for k, v in resources_local.items() if k != "mentioned_resources" and v}
+    for category, items in direct_resources.items():
         if items:
             lines.append(f"### {category.replace('_', ' ').title()}")
             for item in items:
                 lines.append(f"- {item}")
+    # Mentioned resources
+    mentioned = resources_local.get("mentioned_resources", [])
+    if mentioned:
+        lines.append("### Mentioned Resources")
+        for item in mentioned:
+            name = item.get("name", "Unknown")
+            official = item.get("official_url") or "Not resolved"
+            source = item.get("source", "summary")
+            status_text = item.get("resolution_status", "unresolved")
+            type_display = item.get("type", "unknown")
+            lines.append(f"- **{name}** (type: {type_display})  ")
+            lines.append(f"  - Source: {source} | Resolution: {status_text} | Official URL: {official}")
+            if item.get("resolution_note"):
+                lines.append(f"  - Note: {item.get('resolution_note')}")
     lines.append("")
     lines.append("## Action Items")
     actions = get_from_summary("action_items", "Action items")

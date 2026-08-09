@@ -15,7 +15,7 @@ from downloader import video
 from audio import extract_audio
 from whisper import transcribe
 from vision import frames, ocr
-from parser import regex, merge
+from parser import regex, merge, mentioned_resources
 from summarizer import summarize
 from storage import save_json, save_md
 
@@ -166,6 +166,10 @@ def main():
                 print(f"Exception: {e}")
                 raise
 
+            # Build mentioned resources from existing summary output (no new LLM call)
+            mentioned_resources_list = mentioned_resources.extract_mentioned_resources(summary_data)
+            resources["mentioned_resources"] = mentioned_resources_list
+
             # Assemble final result
             result = {
                 "reel_url": reel_url,
@@ -229,7 +233,43 @@ def main():
                     st.write(str(summary_data))
 
             st.subheader("Resources Detected")
-            st.json(resources)
+            # Direct links (existing regex categories)
+            direct_categories = {
+                k: v for k, v in resources.items()
+                if k != "mentioned_resources" and v
+            }
+            if direct_categories:
+                st.markdown("**Direct Links**")
+                for cat, items in direct_categories.items():
+                    st.write(f"- **{cat.replace('_', ' ').title()}**: {', '.join(str(i) for i in items)}")
+            else:
+                st.markdown("*No direct links detected.*")
+
+            # Mentioned resources (from summarizer, no fabricated URLs)
+            mentioned = resources.get("mentioned_resources", [])
+            if mentioned:
+                st.markdown("**Mentioned Resources**")
+                for item in mentioned:
+                    official = item.get("official_url") or "Not resolved"
+                    source = item.get("source", "summary")
+                    status_text = item.get("resolution_status", "unresolved")
+                    name_display = item.get("name", "Unknown")
+                    type_display = item.get("type", "unknown")
+                    resolution_note = item.get("resolution_note")
+                    note_line = f"  Note: `{resolution_note}`" if resolution_note else ""
+                    st.markdown(
+                        f"- **{name_display}** (type: {type_display})  \n"
+                        f"  Official URL: `{official}`  \n"
+                        f"  Source: `{source}`  \n"
+                        f"  Resolution: `{status_text}`"
+                        + (f"  \n{note_line}" if note_line else "")
+                    )
+            else:
+                st.markdown("*No mentioned resources detected.*")
+
+            # Raw JSON for debugging
+            with st.expander("Raw JSON (debug)"):
+                st.json(resources)
 
             st.subheader("Download")
             with open(json_path, "r", encoding="utf-8") as f:
