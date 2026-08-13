@@ -203,7 +203,7 @@ def summarize_cloud_structured(merged_text: str) -> dict:
         ],
         "temperature": 0.1,
     }
-    response = requests.post(config.CLOUD_API_URL, headers=headers, json=payload, timeout=120)
+    response = requests.post(config.CLOUD_API_URL.rstrip("/") + "/chat/completions", headers=headers, json=payload, timeout=120)
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
     content = content.strip()

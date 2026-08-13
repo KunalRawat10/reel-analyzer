@@ -2,6 +2,13 @@
 import os
 from pathlib import Path
 
+# Load .env before reading configuration variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv(str(Path(__file__).resolve().parent / ".env"), override=False)
+except Exception:
+    pass
+
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "output"
 TEMP_DIR = BASE_DIR / "temp"
