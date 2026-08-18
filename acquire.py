@@ -205,3 +205,51 @@ def acquire_reel(url: str, output_path: Path | None = None) -> Path:
         # But we clearly log the issue.
 
     return output_path
+
+
+def get_description(url: str, cookie_path: Path | None = None) -> str:
+    """Extract the Reel description/caption using yt-dlp --print '%(description)s'.
+
+    Uses the same cookie/session logic as acquire_reel(). Returns the stripped
+    description text, or an empty string if extraction fails, times out, or the
+    description is unavailable (public/private/unavailable content).
+    Does NOT raise on failure — graceful empty-string fallback.
+    """
+    # Replicate cookie preference logic from acquire_reel()
+    converted_cookie_path = config.BASE_DIR / ".instagram_session_cookies.txt"
+    session_cookie_path = config.BASE_DIR / ".instagram_session"
+    cookie_path_for_cmd = None
+    if converted_cookie_path.exists() and converted_cookie_path.stat().st_size > 0:
+        cookie_path_for_cmd = converted_cookie_path
+    elif session_cookie_path.exists():
+        cookie_path_for_cmd = session_cookie_path
+
+    # If an explicit cookie_path is passed (e.g., from caller), prefer it
+    if cookie_path:
+        cookie_path_for_cmd = cookie_path
+
+    cookie_args = ["--cookies", str(cookie_path_for_cmd)] if cookie_path_for_cmd else []
+    cmd = [
+        "yt-dlp",
+        "--print", "%(description)s",
+        url,
+    ] + cookie_args
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        stdout_text = result.stdout or ""
+        stripped = stdout_text.strip()
+        # If yt-dlp outputs "NA" or empty for missing descriptions, treat as empty
+        if stripped.lower() in ("na", "n/a", "", "null", "none"):
+            return ""
+        # If description contains newlines, keep them (merge_data handles multi-line)
+        return stripped
+    except subprocess.TimeoutExpired:
+        print("[Acquire] Description extraction timed out after 60s.")
+        return ""
+    except FileNotFoundError:
+        print("[Acquire] yt-dlp not installed; description extraction skipped.")
+        return ""
+    except Exception as e:
+        print(f"[Acquire] Description extraction failed: {e}")
+        return ""

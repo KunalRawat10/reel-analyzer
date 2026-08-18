@@ -149,7 +149,7 @@ def main():
             combined_for_regex = transcript_text + "\n" + "\n".join(ocr_texts)
             resources = regex.extract_resources(combined_for_regex)
 
-            caption_text = ""
+            caption_text = acquire.get_description(reel_url)
             # Merge
             merged_text = merge.merge_data(transcript_text, ocr_texts, caption_text, resources)
 
